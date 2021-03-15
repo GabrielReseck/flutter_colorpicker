@@ -20,7 +20,8 @@ class _MyAppState extends State<MyApp> {
   List<Color> currentColors = [Colors.limeAccent, Colors.green];
 
   void changeColor(Color color) => setState(() => currentColor = color);
-  void changeColors(List<Color> colors) => setState(() => currentColors = colors);
+  void changeColors(List<Color> colors) =>
+      setState(() => currentColors = colors);
 
   @override
   Widget build(BuildContext context) {
@@ -105,7 +106,7 @@ class _MyAppState extends State<MyApp> {
                                 showLabel: false,
                                 showIndicator: true,
                                 indicatorBorderRadius:
-                                const BorderRadius.vertical(
+                                    const BorderRadius.vertical(
                                   top: const Radius.circular(25.0),
                                 ),
                               ),
@@ -154,29 +155,22 @@ class _MyAppState extends State<MyApp> {
                 child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: <Widget>[
-                      RaisedButton(
-                        elevation: 3.0,
+                      BlockPicker(
+                        pickerColor: currentColor,
+                        onColorChanged: changeColor,
+                      ),
+                      TextButton(
+                        child: Text(
+                          'CHANGE COLOR',
+                        ),
                         onPressed: () {
-                          showDialog(
-                            context: context,
-                            builder: (BuildContext context) {
-                              return AlertDialog(
-                                title: Text('Select a color'),
-                                content: SingleChildScrollView(
-                                  child: BlockPicker(
-                                    pickerColor: currentColor,
-                                    onColorChanged: changeColor,
-                                  ),
-                                ),
-                              );
-                            },
-                          );
+                          if (currentColor == Colors.red) {
+                            currentColor = Colors.blue;
+                          } else {
+                            currentColor = Colors.red;
+                          }
+                          setState(() {});
                         },
-                        child: const Text('Change me'),
-                        color: currentColor,
-                        textColor: useWhiteForeground(currentColor)
-                            ? const Color(0xffffffff)
-                            : const Color(0xff000000),
                       ),
                       RaisedButton(
                         elevation: 3.0,
@@ -202,8 +196,7 @@ class _MyAppState extends State<MyApp> {
                             ? const Color(0xffffffff)
                             : const Color(0xff000000),
                       )
-                    ]
-                ),
+                    ]),
               ),
             ],
           ),

@@ -105,10 +105,12 @@ class BlockPicker extends StatefulWidget {
 
 class _BlockPickerState extends State<BlockPicker> {
   late Color _currentColor;
+  late Color _initialColor;
 
   @override
   void initState() {
     _currentColor = widget.pickerColor;
+    _initialColor = widget.pickerColor;
     super.initState();
   }
 
@@ -119,6 +121,11 @@ class _BlockPickerState extends State<BlockPicker> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.pickerColor != _initialColor) {
+      _initialColor = widget.pickerColor;
+      _currentColor = widget.pickerColor;
+    }
+
     return widget.layoutBuilder(
       context,
       widget.availableColors,
