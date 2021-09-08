@@ -7,7 +7,9 @@ library hsv_picker;
 import 'package:flutter/material.dart';
 
 import 'package:flutter_colorpicker/src/hsv_picker.dart';
+import 'package:flutter_colorpicker/src/utils.dart';
 
+// The default layout of Color Picker.
 class ColorPicker extends StatefulWidget {
   const ColorPicker({
     required this.pickerColor,
@@ -21,6 +23,7 @@ class ColorPicker extends StatefulWidget {
     this.colorPickerWidth: 300.0,
     this.pickerAreaHeightPercent: 1.0,
     this.pickerAreaBorderRadius: const BorderRadius.all(Radius.zero),
+    this.hexInputController,
   });
 
   final Color pickerColor;
@@ -35,6 +38,112 @@ class ColorPicker extends StatefulWidget {
   final double pickerAreaHeightPercent;
   final BorderRadius pickerAreaBorderRadius;
 
+  /// Allows setting the color using text input, via [TextEditingController].
+  ///
+  /// Listens to [String] input and trying to convert it to the valid [Color].
+  /// Contains basic validator, that requires final input to be provided
+  /// in one of those formats:
+  ///
+  /// * RGB
+  /// * #RGB
+  /// * RRGGBB
+  /// * #RRGGBB
+  /// * AARRGGBB
+  /// * #AARRGGBB
+  ///
+  /// Where: A stands for Alpha, R for Red, G for Green, and B for blue color.
+  /// It will only accept 3/6/8 long HEXs with an optional hash (`#`) at the beginning.
+  /// Allowed characters are Latin A-F case insensitive and numbers 0-9.
+  /// It does respect the [enableAlpha] flag, so if alpha is disabled, all inputs
+  /// with transparency are also converted to non-transparent color values.
+  /// ```dart
+  ///   MaterialButton(
+  ///    elevation: 3.0,
+  ///    onPressed: () {
+  ///      // The initial value can be provided directly to the controller.
+  ///      final textController =
+  ///          TextEditingController(text: '#2F19DB');
+  ///      showDialog(
+  ///        context: context,
+  ///        builder: (BuildContext context) {
+  ///          return AlertDialog(
+  ///            scrollable: true,
+  ///            titlePadding: const EdgeInsets.all(0.0),
+  ///            contentPadding: const EdgeInsets.all(0.0),
+  ///            content: Column(
+  ///              children: [
+  ///                ColorPicker(
+  ///                  pickerColor: currentColor,
+  ///                  onColorChanged: changeColor,
+  ///                  colorPickerWidth: 300.0,
+  ///                  pickerAreaHeightPercent: 0.7,
+  ///                  enableAlpha:
+  ///                      true, // hexInputController will respect it too.
+  ///                  displayThumbColor: true,
+  ///                  showLabel: true,
+  ///                  paletteType: PaletteType.hsv,
+  ///                  pickerAreaBorderRadius: const BorderRadius.only(
+  ///                    topLeft: const Radius.circular(2.0),
+  ///                    topRight: const Radius.circular(2.0),
+  ///                  ),
+  ///                  hexInputController: textController, // <- here
+  ///                  portraitOnly: true,
+  ///                ),
+  ///                Padding(
+  ///                  padding: const EdgeInsets.all(16),
+  ///                  /* It can be any text field, for example:
+  ///                  * TextField
+  ///                  * TextFormField
+  ///                  * CupertinoTextField
+  ///                  * EditableText
+  ///                  * any text field from 3-rd party package
+  ///                  * your own text field
+  ///                  so basically anything that supports/uses
+  ///                  a TextEditingController for an editable text.
+  ///                  */
+  ///                  child: CupertinoTextField(
+  ///                    controller: textController,
+  ///                    // Everything below is purely optional.
+  ///                    prefix: Padding(
+  ///                      padding: const EdgeInsets.only(left: 8),
+  ///                      child: const Icon(Icons.tag),
+  ///                    ),
+  ///                    suffix: IconButton(
+  ///                      icon:
+  ///                          const Icon(Icons.content_paste_rounded),
+  ///                      onPressed: () async =>
+  ///                          copyToClipboard(textController.text),
+  ///                    ),
+  ///                    autofocus: true,
+  ///                    maxLength: 9,
+  ///                    inputFormatters: [
+  ///                      // Any custom input formatter can be passed
+  ///                      // here or use any Form validator you want.
+  ///                      UpperCaseTextFormatter(),
+  ///                      FilteringTextInputFormatter.allow(
+  ///                          RegExp(kValidHexPattern)),
+  ///                    ],
+  ///                  ),
+  ///                )
+  ///              ],
+  ///            ),
+  ///          );
+  ///        },
+  ///      );
+  ///    },
+  ///    child: const Text('Change me via text input'),
+  ///    color: currentColor,
+  ///    textColor: useWhiteForeground(currentColor)
+  ///        ? const Color(0xffffffff)
+  ///        : const Color(0xff000000),
+  ///  ),
+  /// ```
+  ///
+  /// Do not forget to `dispose()` your [TextEditingController] if you creating
+  /// it inside any kind of [StatefulWidget]'s [State].
+  /// Reference: https://en.wikipedia.org/wiki/Web_colors#Hex_triplet
+  final TextEditingController? hexInputController;
+
   @override
   _ColorPickerState createState() => _ColorPickerState();
 }
@@ -46,6 +155,16 @@ class _ColorPickerState extends State<ColorPicker> {
   void initState() {
     super.initState();
     currentHsvColor = HSVColor.fromColor(widget.pickerColor);
+    // If there's no initial text in `hexInputController`,
+    if (widget.hexInputController?.text.isEmpty == true) {
+      // set it to the current's color HEX value.
+      widget.hexInputController?.text = colorToHex(
+        currentHsvColor.toColor(),
+        enableAlpha: widget.enableAlpha,
+      );
+    }
+    // Listen to the text input, If there is an `hexInputController` provided.
+    widget.hexInputController?.addListener(colorPickerTextInputListener);
   }
 
   @override
@@ -54,11 +173,31 @@ class _ColorPickerState extends State<ColorPicker> {
     currentHsvColor = HSVColor.fromColor(widget.pickerColor);
   }
 
+  void colorPickerTextInputListener() {
+    // It can't be null really, since it's only listening if the controller
+    // is provided, but it may help to calm the Dart analyzer in the future.
+    if (widget.hexInputController == null) return;
+    // If a user is inserting/typing any text — try to get the color value from it,
+    final Color? color = colorFromHex(widget.hexInputController!.text,
+        // and interpret its transparency, dependent on the widget's settings.
+        enableAlpha: widget.enableAlpha);
+    // If it's the valid color:
+    if (color != null) {
+      // set it as the current color and
+      setState(() => currentHsvColor = HSVColor.fromColor(color));
+      // notify with a callback.
+      widget.onColorChanged(color);
+    }
+  }
+
   Widget colorPickerSlider(TrackType trackType) {
     return ColorPickerSlider(
       trackType,
       currentHsvColor,
       (HSVColor color) {
+        // Update text in `hexInputController` if provided.
+        widget.hexInputController?.text =
+            colorToHex(color.toColor(), enableAlpha: widget.enableAlpha);
         setState(() => currentHsvColor = color);
         widget.onColorChanged(currentHsvColor.toColor());
       },
@@ -72,6 +211,9 @@ class _ColorPickerState extends State<ColorPicker> {
       child: ColorPickerArea(
         currentHsvColor,
         (HSVColor color) {
+          // Update text in `hexInputController` if provided.
+          widget.hexInputController?.text =
+              colorToHex(color.toColor(), enableAlpha: widget.enableAlpha);
           setState(() => currentHsvColor = color);
           widget.onColorChanged(currentHsvColor.toColor());
         },
@@ -175,6 +317,7 @@ class _ColorPickerState extends State<ColorPicker> {
   }
 }
 
+// The Color Picker with three sliders only. Support HSV, HSL and RGB color model.
 class SlidePicker extends StatefulWidget {
   const SlidePicker({
     required this.pickerColor,
